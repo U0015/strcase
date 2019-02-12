@@ -1,8 +1,10 @@
 package strcase
 
 import (
+	"reflect"
 	"unicode"
 	"unicode/utf8"
+	"unsafe"
 )
 
 func ToCamel(str string) string {
@@ -10,7 +12,9 @@ func ToCamel(str string) string {
 		return ``
 	}
 	buf := make([]byte, len(str))
-	pos, up := 0, true
+	ptr := unsafe.Pointer(*(**byte)(unsafe.Pointer(&buf)))
+	offset, up := 0, true
+	hdr := new(reflect.SliceHeader)
 
 	for _, r := range str {
 		if r == '_' || r == '-' || unicode.IsSpace(r) {
@@ -21,10 +25,20 @@ func ToCamel(str string) string {
 			up, r = false, unicode.ToUpper(r)
 		}
 		if r >= utf8.RuneSelf {
-			pos += utf8.EncodeRune(buf[pos:], r)
+			//offset += utf8.EncodeRune(buf[offset:], r)
+			hdr.Data = uintptr(ptr) + uintptr(offset)
+			hdr.Len = len(buf) - offset
+			hdr.Cap = cap(buf) - offset
+			offset += utf8.EncodeRune(*(*[]byte)(unsafe.Pointer(hdr)), r)
 		} else {
-			buf[pos], pos = byte(r), pos+1
+			//buf[offset], offset = byte(r), offset+1
+			*(*byte)(unsafe.Pointer(uintptr(ptr) + uintptr(offset))) = byte(r)
+			offset++
 		}
 	}
-	return string(buf[:pos])
+	//return string(buf[:offset])
+	return *(*string)(unsafe.Pointer(&reflect.StringHeader{
+		Data: (uintptr)(ptr),
+		Len: offset,
+	}))
 }
